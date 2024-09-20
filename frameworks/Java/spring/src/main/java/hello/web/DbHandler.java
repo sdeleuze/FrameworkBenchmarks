@@ -1,9 +1,9 @@
 package hello.web;
 
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.IntStream;
+import java.util.ArrayList;
+import java.util.List;
 
-import hello.UpdateWorldService;
+import hello.Utils;
 import hello.model.Fortune;
 import hello.model.World;
 import hello.repository.DbRepository;
@@ -20,35 +20,34 @@ import static java.util.Comparator.comparing;
 @Component
 public class DbHandler {
 
-	private DbRepository dbRepository;
-	private UpdateWorldService updateWorldService;
+	private final DbRepository dbRepository;
 
-	public DbHandler(DbRepository dbRepository, UpdateWorldService updateWorldService) {
+	public DbHandler(DbRepository dbRepository) {
 		this.dbRepository = dbRepository;
-		this.updateWorldService = updateWorldService;
 	}
 
 	ServerResponse db(ServerRequest request) {
 		return ServerResponse.ok()
 				.contentType(MediaType.APPLICATION_JSON)
-				.body(dbRepository.getWorld(randomWorldNumber()));
+				.body(dbRepository.getWorld(Utils.randomWorldNumber()));
 	}
 
 	ServerResponse queries(ServerRequest request) {
-		String queries = request.params().getFirst("queries");
-		World[] worlds = randomWorldNumbers()
-				.mapToObj(dbRepository::getWorld).limit(parseQueryCount(queries))
-				.toArray(World[]::new);
+		int queries = parseQueryCount(request.params().getFirst("queries"));
+		int[] ids = Utils.randomWorldNumbers(queries);
+		List<World> worlds = new ArrayList<>(queries);
+		for (int id : ids) {
+			worlds.add(dbRepository.getWorld(id));
+		}
 		return ServerResponse.ok()
 				.contentType(MediaType.APPLICATION_JSON)
 				.body(worlds);
 	}
 
 	ServerResponse updates(ServerRequest request) {
-		String queries = request.params().getFirst("queries");
-		World[] worlds = randomWorldNumbers()
-				.mapToObj(id -> updateWorldService.updateWorld(id))
-				.limit(parseQueryCount(queries)).toArray(World[]::new);
+		int queries = parseQueryCount(request.params().getFirst("queries"));
+		int[] randomWorldNumbers = Utils.randomWorldNumbers(queries);
+		List<World> worlds = dbRepository.updateWorlds(randomWorldNumbers);
 		return ServerResponse.ok()
 				.contentType(MediaType.APPLICATION_JSON)
 				.body(worlds);
@@ -63,21 +62,6 @@ public class DbHandler {
 				.modelAttribute("fortunes", fortunes)
 				.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
 				.build();
-	}
-
-	private static final int MIN_WORLD_NUMBER = 1;
-	private static final int MAX_WORLD_NUMBER_PLUS_ONE = 10_001;
-
-	public static int randomWorldNumber() {
-		return ThreadLocalRandom.current().nextInt(MIN_WORLD_NUMBER, MAX_WORLD_NUMBER_PLUS_ONE);
-	}
-
-	private static IntStream randomWorldNumbers() {
-		return ThreadLocalRandom.current().ints(MIN_WORLD_NUMBER, MAX_WORLD_NUMBER_PLUS_ONE)
-				// distinct() allows us to avoid using Hibernate's first-level cache in
-				// the JPA-based implementation. Using a cache like that would bypass
-				// querying the database, which would violate the test requirements.
-				.distinct();
 	}
 
 	private static int parseQueryCount(String textValue) {

@@ -6,9 +6,10 @@ import hello.model.Fortune;
 import hello.model.World;
 
 public interface DbRepository {
+
 	World getWorld(int id);
 
-	World updateWorld(World world, int randomNumber);
+	List<World> updateWorlds(int[] ids);
 
 	List<Fortune> fortunes();
 }
